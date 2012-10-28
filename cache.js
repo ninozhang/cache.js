@@ -1,5 +1,7 @@
 (function() {
-var defaults = {
+var localStorage = window.localStorage;
+var cachePrefix = 'cache:',
+    defaults = {
     maxSize: NaN,
     maxMemSize: NaN,
     ttl: NaN,
@@ -23,6 +25,10 @@ function extend(obj) {
 function Cache() {
     this.init.apply(this, arguments);
 }
+
+Cache.extend = function(algorithms) {
+    extend(Cache.prototype.algorithms, algorithms);
+};
 
 Cache.prototype.algorithms = {};
 
@@ -49,6 +55,7 @@ Cache.prototype.set = function(key, value) {
     if (algorithm._set) {
         algorithm._set.call(this, key, value);
     }
+    return this;
 };
 
 Cache.prototype.add = function(key, value) {
@@ -56,28 +63,40 @@ Cache.prototype.add = function(key, value) {
     if (algorithm._set) {
         algorithm._set.call(this, key, value);
     }
+    return this;
 };
 
 Cache.prototype.replace = function(key, value) {
     if (this.get(key)) {
         this.set(key, value);
     }
+    return this;
 };
 
 Cache.prototype.append = function(key, value) {
     var data = this.get(key);
-
+    return this;
 };
 
 Cache.prototype.prepend = function(key, value) {
     var data = this.get(key);
+    return this;
 };
 
 Cache.prototype.get = function(key) {
     var algorithm = this.algorithm;
     if (algorithm._get) {
-        algorithm._get.call(this, key);
+        return algorithm._get.call(this, key);
     }
+    return null;
+};
+
+Cache.prototype.each = function(fn, context, reverse) {
+    var algorithm = this.algorithm;
+    if (algorithm._each) {
+        algorithm._each.call(this, fn, context, reverse);
+    }
+    return this;
 };
 
 Cache.prototype.remove = function(key) {
@@ -85,6 +104,7 @@ Cache.prototype.remove = function(key) {
     if (algorithm._remove) {
         algorithm._remove.call(this, key);
     }
+    return this;
 };
 
 Cache.prototype.flush = function() {
@@ -92,17 +112,43 @@ Cache.prototype.flush = function() {
     if (algorithm._flush) {
         algorithm._flush.call(this);
     }
+    return this;
 };
 
-Cache.prototype.flush = function() {
-    var algorithm = this.algorithm;
-    if (algorithm._flush) {
-        algorithm._flush.call(this);
+Cache.prototype.stringify = function(obj) {
+    return JSON.stringify(obj);
+};
+
+Cache.prototype.parse = function(str) {
+    return JSON.parse(str);
+};
+
+Cache.prototype.setAllLocal = function() {
+    var k, v,
+        namespace = this.namespace;
+    this.each(function(key, value) {
+        k = cachePrefix + namespace + key;
+        v = this.stringify(value);
+        localStorage.setItem(k, v);
+    }, this);
+    return this;
+};
+
+Cache.prototype.getAllLocal = function() {
+    var length = localStorage.length,
+        namespace = this.namespace,
+        keyPrefix = cachePrefix + namespace,
+        keyStart = keyPrefix.length,
+        key, value;
+    for (var i = 0; i < length; i++) {
+        key = storage.key(i);
+        if (key.indexOf(keyPrefix) === 0) {
+            value = localStorage.getItem(key);
+            key = key.substring(keyStart);
+            this.set(key, value);
+        }
     }
-};
-
-Cache.extend = function(algorithms) {
-    extend(Cache.prototype.algorithms, algorithms);
+    return this;
 };
 
 window.Cache = window.Cache || Cache;

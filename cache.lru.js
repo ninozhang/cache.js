@@ -5,16 +5,19 @@ if (!Cache) {
 }
 Cache.extend({
     'lru': {
-        _set: function () {
+        _set: function (key, value) {
 
         },
-        _add: function () {
+        _add: function (key, value) {
 
         },
-        _get: function () {
+        _get: function (key) {
 
         },
-        _remove: function () {
+        _each: function(fn, context, reverse) {
+
+        },
+        _remove: function (key) {
 
         },
         _flush: function () {
