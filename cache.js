@@ -1,13 +1,16 @@
 (function() {
 var localStorage = window.localStorage;
-var cachePrefix = 'cache:',
+var cachePrefix = 'cache',
     defaults = {
-    maxSize: NaN,
-    maxMemSize: NaN,
-    ttl: NaN,
-    algorithm: '',
-    namespace: ''
-};
+        inited: false,
+        size: 0,
+        maxSize: NaN,
+        ttl: NaN,
+        sign: ':',
+        algorithm: '',
+        ns: '',
+        persistent: true
+    };
 
 function extend(obj) {
     var args = Array.prototype.slice.call(arguments, 1),
@@ -38,30 +41,56 @@ Cache.prototype.init = function(options) {
 };
 
 Cache.prototype.config = function(options) {
-    if (options) {
-        extend(this, options);
+    if (!options) {
+        return;
     }
-    if (typeof this.algorithm === 'string') {
+    if (typeof options.persistent === 'boolean' &&
+        this.persistent !== options.persistent) {
+        this.removeAllLocal();
+        this.persistent = options.persistent;
+    }
+    if ((typeof options.ns === 'string' &&
+            this.ns !== options.ns) ||
+        (typeof options.sign === 'string' &&
+            this.sign !== options.sign)) {
+        this.removeAllLocal();
+        this.ns = options.ns || this.ns;
+        this.sign = options.sign || this.sign;
+    }
+    if (typeof options.maxSize === 'number') {
+        this.maxSize = options.maxSize;
+        while (this.size > this.maxSize) {
+            this.pop();
+        }
+    }
+    if (this.persistent) {
+        this.setAllLocal();
+    }
+    if (typeof options.algorithm === 'string' &&
+        this.algorithm !== options.algorithm) {
+        this.algorithm = options.algorithm;
         this.switchAlgorithm(this.algorithm);
     }
 };
 
 Cache.prototype.switchAlgorithm = function(name) {
+    this.inited = false;
     this.algorithm = this.algorithms[name];
+    if (this.algorithm._init) {
+        this.algorithm._init.call(this);
+    }
 };
 
 Cache.prototype.set = function(key, value) {
-    var algorithm = this.algorithm;
-    if (algorithm._set) {
-        algorithm._set.call(this, key, value);
+    if (this.algorithm._set) {
+        this.algorithm._set.call(this, key, value);
     }
     return this;
 };
 
 Cache.prototype.add = function(key, value) {
-    var algorithm = this.algorithm;
-    if (algorithm._set) {
-        algorithm._set.call(this, key, value);
+    if (this.algorithm._add) {
+        this.algorithm._add.call(this, key, value);
     }
     return this;
 };
@@ -74,45 +103,93 @@ Cache.prototype.replace = function(key, value) {
 };
 
 Cache.prototype.append = function(key, value) {
-    var data = this.get(key);
+    this._pend(key, value, 'append');
     return this;
 };
 
 Cache.prototype.prepend = function(key, value) {
-    var data = this.get(key);
+    this._pend(key, value, 'prepend');
     return this;
 };
 
+Cache.prototype._pend = function(key, value, action) {
+    if (typeof key === 'undefined' ||
+        typeof value === 'undefined') {
+        return this;
+    }
+
+    var data = this.get(key);
+    // 已存储得值是数组，附加元素
+    if (Array.isArray(data)) {
+        var array = Array.isArray(value) ? value : [value],
+            length = array.length,
+            i;
+        if (action === 'append') {
+            for (i = 0; i < length; i++) {
+                data.push(array[i]);
+            }
+        } else {
+            for (i = length - 1; i >= 0; i--) {
+                data.unshift(array[i]);
+            }
+        }
+        
+    // 已存储得值是对象，附加属性
+    } else if (data) {
+        extend(data, value);
+    }
+
+    this.set(key, data);
+    return this;
+};
+
+Cache.prototype.has = function(key) {
+    if (this.algorithm._has) {
+        return this.algorithm._has.call(this, key);
+    }
+    return false;
+};
+
 Cache.prototype.get = function(key) {
-    var algorithm = this.algorithm;
-    if (algorithm._get) {
-        return algorithm._get.call(this, key);
+    if (this.algorithm._get) {
+        return this.algorithm._get.call(this, key);
+    }
+    return null;
+};
+
+Cache.prototype.pop = function(ey) {
+    if (this.algorithm._pop) {
+        return this.algorithm._pop.call(this);
     }
     return null;
 };
 
 Cache.prototype.each = function(fn, context, reverse) {
-    var algorithm = this.algorithm;
-    if (algorithm._each) {
-        algorithm._each.call(this, fn, context, reverse);
+    if (this.algorithm._each) {
+        this.algorithm._each.call(this, fn, context, reverse);
     }
     return this;
 };
 
 Cache.prototype.remove = function(key) {
-    var algorithm = this.algorithm;
-    if (algorithm._remove) {
-        algorithm._remove.call(this, key);
+    if (this.algorithm._remove) {
+        this.algorithm._remove.call(this, key);
     }
     return this;
 };
 
 Cache.prototype.flush = function() {
-    var algorithm = this.algorithm;
-    if (algorithm._flush) {
-        algorithm._flush.call(this);
+    if (this.algorithm._flush) {
+        this.algorithm._flush.call(this);
     }
     return this;
+};
+
+Cache.prototype.counter = function(diff) {
+    if (!isNaN(diff)) {
+        this.size += diff;
+    }
+    return this.size;
 };
 
 Cache.prototype.stringify = function(obj) {
@@ -123,11 +200,30 @@ Cache.prototype.parse = function(str) {
     return JSON.parse(str);
 };
 
+Cache.prototype.setLocal = function(key, value) {
+    key = [cachePrefix, this.ns, key].join(this.sign);
+    value = this.stringify(value);
+    localStorage.setItem(key, value);
+    return this;
+};
+
+Cache.prototype.getLocal = function(key) {
+    var value;
+    key = [cachePrefix, this.ns, key].join(this.sign);
+    value = localStorage.getItem(key);
+    return this.parse(value);
+};
+
+Cache.prototype.removeLocal = function(key) {
+    key = [cachePrefix, this.ns, key].join(this.sign);
+    localStorage.removeItem(key);
+    return this;
+};
+
 Cache.prototype.setAllLocal = function() {
-    var k, v,
-        namespace = this.namespace;
-    this.each(function(key, value) {
-        k = cachePrefix + namespace + key;
+    var k, v;
+    this.each(function(value, key) {
+        k = [cachePrefix, this.ns, key].join(this.sign);
         v = this.stringify(value);
         localStorage.setItem(k, v);
     }, this);
@@ -136,16 +232,28 @@ Cache.prototype.setAllLocal = function() {
 
 Cache.prototype.getAllLocal = function() {
     var length = localStorage.length,
-        namespace = this.namespace,
-        keyPrefix = cachePrefix + namespace,
+        keyPrefix = cachePrefix + this.sign + this.ns + this.sign,
         keyStart = keyPrefix.length,
         key, value;
     for (var i = 0; i < length; i++) {
-        key = storage.key(i);
-        if (key.indexOf(keyPrefix) === 0) {
-            value = localStorage.getItem(key);
+        key = localStorage.key(i);
+        if (key && key.indexOf(keyPrefix) === 0) {
+            value = this.parse(localStorage.getItem(key));
             key = key.substring(keyStart);
             this.set(key, value);
+        }
+    }
+    return this;
+};
+
+Cache.prototype.removeAllLocal = function() {
+    var length = localStorage.length,
+        keyPrefix = [cachePrefix, this.ns].join(this.sign),
+        key;
+    for (var i = 0; i < length; i++) {
+        key = localStorage.key(i);
+        if (key && key.indexOf(keyPrefix) === 0) {
+            localStorage.removeItem(key);
         }
     }
     return this;

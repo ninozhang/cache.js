@@ -36,6 +36,9 @@ cache.js
 * prepend(key, value)
 将新数据附加在已存在的数据头部。
 
+* has(key)
+判断缓存中是否有对应数据。
+
 * get(key)
 获取数据。
 
@@ -47,7 +50,7 @@ cache.js
 
 ## 作者
 
-nino zhang
+nino zhang(ninozhang@foxmail.com)
 
 ## 协议
 

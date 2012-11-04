@@ -5,6 +5,9 @@ if (!Cache) {
 }
 Cache.extend({
     'lfu': {
+        _init: function() {
+            this.inited = true;
+        },
         _set: function (key, value) {
 
         },
