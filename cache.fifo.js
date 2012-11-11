@@ -1,3 +1,14 @@
+/**
+ * 示意图:
+ *
+ *       value     value     value     value
+ *       ______    ______    ______    ______
+ *      |first |  |      |  |      |  | last |
+ *      |  A   |  |  B   |  |  C   |  |  D   |
+ *      |______|  |______|  |______|  |______|
+ *
+ *  将被移除  <--  <--  <--  <--  <--  <--  新添加
+ */
 (function() {
 var Cache = window.Cache;
 if (!Cache) {
@@ -8,12 +19,8 @@ Cache.extend({
         _init: function() {
             this.data = {};
             this.getAllLocal();
-            this.inited = true;
         },
         _set: function (key, value) {
-            if (typeof value === 'undefined') {
-                return this;
-            }
             var data = this.data;
             if (typeof data[key] === 'undefined') {
                 while (!isNaN(this.maxSize) &&
@@ -27,13 +34,11 @@ Cache.extend({
                 this.persistent === true) {
                 this.setLocal(key, value);
             }
-            return this;
         },
         _add: function (key, value) {
-            if (typeof this.data[key] === 'undefined') {
+            if (!this.has(key)) {
                 this.set(key, value);
             }
-            return this;
         },
         _has: function(key) {
             return typeof this.data[key] !== 'undefined';
@@ -47,18 +52,10 @@ Cache.extend({
                 this.remove(key);
                 return value;
             }
-            return null;
         },
         _each: function(fn, context, reverse) {
-            if (!fn) {
-                return this;
-            }
             var data = this.data,
                 key;
-            if (!context) {
-                context = this;
-            }
-            reverse = reverse === true;
             if (!reverse) {
                 for (key in data) {
                     fn.call(context, data[key], key);
@@ -68,18 +65,19 @@ Cache.extend({
                 for (key in data) {
                     keys.push(key);
                 }
-                for (var i = keys.length - 1; i <= 0; i--) {
+                for (var i = keys.length - 1; i >= 0; i--) {
                     key = keys[i];
                     fn.call(context, data[key], key);
                 }
             }
-            return this;
         },
         _remove: function (key) {
             if (this.has(key)) {
+                var value = this.data[key];
                 delete this.data[key];
                 this.removeLocal(key);
                 this.counter(-1);
+                return value;
             }
         },
         _flush: function () {

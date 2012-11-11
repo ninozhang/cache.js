@@ -5,6 +5,8 @@ if (!Cache) {
 }
 Cache.extend({
     'random': {
+        _init: function() {
+        },
         _set: function (key, value) {
 
         },

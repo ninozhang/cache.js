@@ -79,9 +79,13 @@ Cache.prototype.switchAlgorithm = function(name) {
     if (this.algorithm._init) {
         this.algorithm._init.call(this);
     }
+    this.inited = true;
 };
 
 Cache.prototype.set = function(key, value) {
+    if (typeof value === 'undefined') {
+        return this;
+    }
     if (this.algorithm._set) {
         this.algorithm._set.call(this, key, value);
     }
@@ -89,6 +93,9 @@ Cache.prototype.set = function(key, value) {
 };
 
 Cache.prototype.add = function(key, value) {
+    if (typeof value === 'undefined') {
+        return this;
+    }
     if (this.algorithm._add) {
         this.algorithm._add.call(this, key, value);
     }
@@ -154,18 +161,23 @@ Cache.prototype.get = function(key) {
     if (this.algorithm._get) {
         return this.algorithm._get.call(this, key);
     }
-    return null;
 };
 
 Cache.prototype.pop = function(ey) {
     if (this.algorithm._pop) {
         return this.algorithm._pop.call(this);
     }
-    return null;
 };
 
 Cache.prototype.each = function(fn, context, reverse) {
+    if (!fn) {
+        return this;
+    }
     if (this.algorithm._each) {
+        if (!context) {
+            context = this;
+        }
+        reverse = reverse === true;
         this.algorithm._each.call(this, fn, context, reverse);
     }
     return this;
@@ -173,9 +185,8 @@ Cache.prototype.each = function(fn, context, reverse) {
 
 Cache.prototype.remove = function(key) {
     if (this.algorithm._remove) {
-        this.algorithm._remove.call(this, key);
+        return this.algorithm._remove.call(this, key);
     }
-    return this;
 };
 
 Cache.prototype.flush = function() {

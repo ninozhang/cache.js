@@ -1,66 +1,160 @@
-var localStorage = window.localStorage;
-
 module('Cache');
 
 test('FIFO', function() {
-    var fifo = new Cache({
+    var cache = new Cache({
         algorithm: 'fifo',
         ns: 'fifo',
         maxSize: 2
     });
-    fifo.set('a', 'a');
-    equal(fifo.get('a'), 'a', 'get');
-    equal(fifo.has('a'), true, 'has');
-    equal(fifo.has('b'), false, 'has');
-    fifo.set('b', 'b');
-    equal(fifo.has('b'), true, 'has');
-    equal(fifo.size, 2, 'size');
-    fifo.set('c', 'c');
-    equal(fifo.size, 2, 'size');
-    equal(fifo.get('a'), void(0), 'fifo');
+    cache.set('a', 'a');
+    equal(cache.get('a'), 'a', 'get');
+    equal(cache.has('a'), true, 'has');
+    equal(cache.has('b'), false, 'has');
+    cache.set('b', 'b');
+    equal(cache.has('b'), true, 'has');
+    equal(cache.size, 2, 'size');
+    cache.set('c', 'c');
+    equal(cache.size, 2, 'size');
+    equal(cache.get('a'), void(0), 'cache');
     equal(localStorage.getItem('cache:fifo:a'), void(0), 'localStorage');
-    equal(fifo.parse(localStorage.getItem('cache:fifo:b')), 'b', 'localStorage');
+    equal(cache.parse(localStorage.getItem('cache:fifo:b')), 'b', 'localStorage');
 
-    fifo.config({
+    cache.config({
         sign: '-',
         maxSize: 3
     });
-    fifo.set('d', 'd');
-    equal(fifo.get('d'), 'd', 'get');
-    equal(fifo.size, 3, 'size');
-    equal(fifo.parse(localStorage.getItem('cache-fifo-d')), 'd', 'localStorage');
+    cache.set('d', 'd');
+    equal(cache.get('d'), 'd', 'get');
+    equal(cache.size, 3, 'size');
+    equal(cache.parse(localStorage.getItem('cache-fifo-d')), 'd', 'localStorage');
 
-    fifo.add('d', 'dd');
-    equal(fifo.get('d'), 'd', 'get');
+    var arr = [];
+    cache.each(function(value, key) {
+        arr.push(value);
+    });
+    deepEqual(arr, ['b', 'c', 'd'], 'each');
+    arr = [];
+    cache.each(function(value, key) {
+        this.push(value);
+    }, arr, true);
+    deepEqual(arr, ['d', 'c', 'b'], 'each-reverse');
 
-    fifo.remove('d');
-    equal(fifo.get('d'), void(0));
+    cache.add('d', 'dd');
+    equal(cache.get('d'), 'd', 'get');
 
-    fifo.add('d', ['d']);
-    fifo.append('d', 'e');
-    fifo.append('d', ['f', 'g']);
-    fifo.prepend('d', 'c');
-    fifo.prepend('d', ['a', 'b']);
-    deepEqual(fifo.get('d'), ['a', 'b', 'c', 'd', 'e', 'f', 'g'], 'append, prepend');
+    cache.remove('d');
+    equal(cache.get('d'), void(0));
+
+    cache.add('d', ['d']);
+    cache.append('d', 'e');
+    cache.append('d', ['f', 'g']);
+    cache.prepend('d', 'c');
+    cache.prepend('d', ['a', 'b']);
+    deepEqual(cache.get('d'), ['a', 'b', 'c', 'd', 'e', 'f', 'g'], 'append, prepend');
+
+    cache.flush();
+    equal(cache.get('a'), void(0), 'flush');
+    equal(cache.get('b'), void(0), 'flush');
+    equal(cache.get('c'), void(0), 'flush');
+    equal(cache.get('d'), void(0), 'flush');
+    equal(localStorage.getItem('cache-fifo-a'), void(0), 'flush');
+    equal(localStorage.getItem('cache-fifo-b'), void(0), 'flush');
+    equal(localStorage.getItem('cache-fifo-c'), void(0), 'flush');
+    equal(localStorage.getItem('cache-fifo-d'), void(0), 'flush');
 });
 
 test('LFU', function() {
     var lfu = new Cache({
         algorithm: 'lfu'
     });
-console.log(lfu);
+    ok('lfu');
 });
 
 test('LRU', function() {
-    var lru = new Cache({
-        algorithm: 'lru'
+    var cache = new Cache({
+        algorithm: 'lru',
+        ns: 'lru',
+        maxSize: 2
     });
-console.log(lru);
+    cache.set('a', 'a');
+    equal(cache.get('a'), 'a', 'get');
+    equal(cache.has('a'), true, 'has');
+    equal(cache.has('b'), false, 'has');
+    cache.set('b', 'b');
+    equal(cache.has('b'), true, 'has');
+    equal(cache.size, 2, 'size');
+    cache.set('c', 'c');
+    equal(cache.size, 2, 'size');
+    equal(cache.get('a'), void(0), 'cache');
+    equal(localStorage.getItem('cache:lru:a'), void(0), 'localStorage');
+    equal(cache.parse(localStorage.getItem('cache:lru:b')), 'b', 'localStorage');
+
+    cache.config({
+        sign: '-',
+        maxSize: 3
+    });
+    cache.set('d', 'd');
+    equal(cache.get('d'), 'd', 'get');
+    equal(cache.size, 3, 'size');
+    equal(cache.parse(localStorage.getItem('cache-lru-d')), 'd', 'localStorage');
+
+    cache.add('d', 'dd');
+    equal(cache.get('d'), 'd', 'get');
+
+    cache.remove('d');
+    equal(cache.get('d'), void(0));
+
+    cache.add('d', ['d']);
+    cache.append('d', 'e');
+    cache.append('d', ['f', 'g']);
+    cache.prepend('d', 'c');
+    cache.prepend('d', ['a', 'b']);
+    deepEqual(cache.get('d'), ['a', 'b', 'c', 'd', 'e', 'f', 'g'], 'append, prepend');
+
+    cache.set('d', 'd');
+    cache.get('b');
+    cache.get('c');
+    cache.get('d');
+    // b < c < d
+
+    cache.set('a', 'a');
+    equal(cache.get('b'), void(0), 'get');
+    equal(cache.get('c'), 'c', 'get');
+    equal(cache.get('d'), 'd', 'get');
+    equal(cache.get('a'), 'a', 'get');
+    // c < d < a
+
+    var arr = [];
+    cache.each(function(value, key) {
+        arr.push(value);
+    });
+    deepEqual(arr, ['c', 'd', 'a'], 'each');
+    arr = [];
+    cache.each(function(value, key) {
+        this.push(value);
+    }, arr, true);
+    deepEqual(arr, ['a', 'd', 'c'], 'each-reverse');
+
+    cache.set('b', 'b');
+    equal(cache.get('a'), 'a', 'get');
+    equal(cache.get('b'), 'b', 'get');
+    equal(cache.get('c'), void(0), 'get');
+    equal(cache.get('d'), 'd', 'get');
+
+    cache.flush();
+    equal(cache.get('a'), void(0), 'flush');
+    equal(cache.get('b'), void(0), 'flush');
+    equal(cache.get('c'), void(0), 'flush');
+    equal(cache.get('d'), void(0), 'flush');
+    equal(localStorage.getItem('cache-fifo-a'), void(0), 'flush');
+    equal(localStorage.getItem('cache-fifo-b'), void(0), 'flush');
+    equal(localStorage.getItem('cache-fifo-c'), void(0), 'flush');
+    equal(localStorage.getItem('cache-fifo-d'), void(0), 'flush');
 });
 
 test('Random', function() {
     var random = new Cache({
         algorithm: 'random'
     });
-console.log(random);
+    ok('random');
 });
