@@ -52,6 +52,14 @@ test('FIFO', function() {
     cache.prepend('d', ['a', 'b']);
     deepEqual(cache.get('d'), ['a', 'b', 'c', 'd', 'e', 'f', 'g'], 'append, prepend');
 
+    cache.add('nini', 'nino');
+    cache.add('nino', 'nino');
+    cache.add('nono', 'nono');
+    cache.remove('ni*');
+    equal(cache.get('nini'), void(0), 'remove *');
+    equal(cache.get('nino'), void(0), 'remove *');
+    equal(cache.get('nono'), 'nono', 'remove *');
+
     cache.flush();
     equal(cache.get('a'), void(0), 'flush');
     equal(cache.get('b'), void(0), 'flush');
@@ -140,6 +148,14 @@ test('LRU', function() {
     equal(cache.get('b'), 'b', 'get');
     equal(cache.get('c'), void(0), 'get');
     equal(cache.get('d'), 'd', 'get');
+    
+    cache.add('nini', 'nino');
+    cache.add('nino', 'nino');
+    cache.add('nono', 'nono');
+    cache.remove('ni*');
+    equal(cache.get('nini'), void(0), 'remove *');
+    equal(cache.get('nino'), void(0), 'remove *');
+    equal(cache.get('nono'), 'nono', 'remove *');
 
     cache.flush();
     equal(cache.get('a'), void(0), 'flush');

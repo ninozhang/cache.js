@@ -184,8 +184,17 @@ Cache.prototype.each = function(fn, context, reverse) {
 };
 
 Cache.prototype.remove = function(key) {
-    if (this.algorithm._remove) {
-        return this.algorithm._remove.call(this, key);
+    if (key.indexOf('*') > -1) {
+        var prefix = key.substring(0, key.indexOf('*'));
+        this.each(function(value, key) {
+            if (key.indexOf(prefix) === 0) {
+                this.remove(key);
+            }
+        }, this);
+    } else {
+        if (this.algorithm._remove) {
+            return this.algorithm._remove.call(this, key);
+        }
     }
 };
 
