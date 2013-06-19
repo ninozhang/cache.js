@@ -16,11 +16,11 @@ if (!Cache) {
 }
 Cache.extend({
     'fifo': {
-        _init: function() {
+        init: function() {
             this.data = {};
             this.getAllLocal();
         },
-        _set: function (key, value) {
+        set: function (key, value) {
             var data = this.data;
             if (typeof data[key] === 'undefined') {
                 while (!isNaN(this.maxSize) &&
@@ -35,25 +35,25 @@ Cache.extend({
                 this.setLocal(key, value);
             }
         },
-        _add: function (key, value) {
+        add: function (key, value) {
             if (!this.has(key)) {
                 this.set(key, value);
             }
         },
-        _has: function(key) {
+        has: function(key) {
             return typeof this.data[key] !== 'undefined';
         },
-        _get: function (key) {
+        get: function (key) {
             return this.data[key];
         },
-        _pop: function() {
+        pop: function() {
             for (var key in this.data) {
                 var value = this.data[key];
                 this.remove(key);
                 return value;
             }
         },
-        _each: function(fn, context, reverse) {
+        each: function(fn, context, reverse) {
             var data = this.data,
                 key;
             if (!reverse) {
@@ -71,7 +71,7 @@ Cache.extend({
                 }
             }
         },
-        _remove: function (key) {
+        remove: function (key) {
             if (this.has(key)) {
                 var value = this.data[key];
                 delete this.data[key];
@@ -80,7 +80,7 @@ Cache.extend({
                 return value;
             }
         },
-        _flush: function () {
+        flush: function () {
             for (var key in this.data) {
                 this.remove(key);
             }

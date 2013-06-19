@@ -17,13 +17,13 @@ if (!Cache) {
 }
 Cache.extend({
     'lru': {
-        _init: function() {
+        init: function() {
             this.data = {};
             this.head = null;
             this.tail = null;
             this.getAllLocal();
         },
-        _set: function (key, value) {
+        set: function (key, value) {
             var entry = {
                     key: key,
                     value: value,
@@ -53,29 +53,28 @@ Cache.extend({
                 this.setLocal(key, value);
             }
         },
-        _add: function (key, value) {
+        add: function (key, value) {
             if (!this.has(key)) {
                 this.set(key, value);
             }
         },
-        _has: function(key) {
+        has: function(key) {
             return !!this.data[key];
         },
-        _get: function (key) {
+        get: function (key) {
             var entry = this.data[key];
             if (!entry) {
                 return;
             }
-            
             this.set(entry.key, entry.value);
             return entry.value;
         },
-        _pop: function() {
+        pop: function() {
             if (this.head) {
                 this.remove(this.head.key);
             }
         },
-        _each: function(fn, context, reverse) {
+        each: function(fn, context, reverse) {
             var entry = reverse ? this.tail : this.head,
                 flag = reverse ? 'prev' : 'next';
             while (entry) {
@@ -83,7 +82,7 @@ Cache.extend({
                 entry = entry[flag];
             }
         },
-        _remove: function (key) {
+        remove: function (key) {
             var entry = this.data[key];
             if (!entry) {
                 return;
@@ -106,7 +105,7 @@ Cache.extend({
             this.counter(-1);
             return entry.value;
         },
-        _flush: function () {
+        flush: function () {
             var entry = this.head;
             while (entry) {
                 this.remove(entry.key);

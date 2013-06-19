@@ -5,24 +5,24 @@ if (!Cache) {
 }
 Cache.extend({
     'lfu': {
-        _init: function() {
+        init: function() {
         },
-        _set: function (key, value) {
+        set: function (key, value) {
 
         },
-        _add: function (key, value) {
+        add: function (key, value) {
 
         },
-        _get: function (key) {
+        get: function (key) {
 
         },
-        _each: function(fn, context, reverse) {
+        each: function(fn, context, reverse) {
 
         },
-        _remove: function (key) {
+        remove: function (key) {
 
         },
-        _flush: function () {
+        flush: function () {
 
         }
     }
