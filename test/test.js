@@ -1,4 +1,9 @@
-var undef;
+var undef,
+    storaged = {
+        'str': 'str',
+        'obj': {'obj': 'obj'},
+        'num': 1
+    };
 
 module('Cache');
 
@@ -151,6 +156,16 @@ asyncTest('FIFO.exp', function() {
     }, 1200);
 });
 
+test('FIFO.restore', function () {
+    var fifo = new Cache(5, 'fifo', 'fifo-restore');
+    for (var key in storaged) {
+        deepEqual(fifo.get(key), storaged[key], 'restore');
+    }
+    for (var key in storaged) {
+        fifo.set(key, storaged[key]);
+    }
+});
+
 test('LFU', function () {
     var lfu = new Cache({
         algorithm: 'lfu'
@@ -238,6 +253,29 @@ test('LRU', function () {
     equal(cache.get('b'), void(0), 'flush');
     equal(cache.get('c'), void(0), 'flush');
     equal(cache.get('d'), void(0), 'flush');
+});
+
+asyncTest('LRU.exp', function() {
+    var cache = new Cache(4, 'lru', 'lru-exp');
+    cache.set('a', 1, 0);
+    cache.set('b', 2, 1);
+    cache.set('c', 3, 3);
+    setTimeout(function() {
+        equal(cache.has('a'), true);
+        equal(cache.has('b'), false);
+        equal(cache.has('c'), true);
+        start();
+    }, 1200);
+});
+
+test('LRU.restore', function () {
+    var lru = new Cache(5, 'lru', 'lru-restore');
+    for (var key in storaged) {
+        deepEqual(lru.get(key), storaged[key], 'restore');
+    }
+    for (var key in storaged) {
+        lru.set(key, storaged[key]);
+    }
 });
 
 test('Random', function () {
