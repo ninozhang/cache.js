@@ -1,28 +1,29 @@
-(function() {
+(function () {
 var Cache = window.Cache;
-if (!Cache) {
+if (!Cache || !Cache.extend) {
     return;
 }
 Cache.extend({
     'random': {
-        init: function() {
+        _init: function () {
+            this.data = {};
         },
-        set: function (key, value) {
+        _set: function (entry) {
 
         },
-        add: function (key, value) {
+        _add: function (entry) {
 
         },
-        get: function (key) {
+        _get: function (key) {
 
         },
-        each: function(fn, context, reverse) {
+        _each: function (fn, reverse) {
 
         },
-        remove: function (key) {
+        _remove: function (key) {
 
         },
-        flush: function () {
+        _flush: function () {
 
         }
     }

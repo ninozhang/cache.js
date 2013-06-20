@@ -9,56 +9,45 @@
  *
  *  将被移除  <--  <--  <--  <--  <--  <--  新添加
  */
-(function() {
+(function () {
 var Cache = window.Cache;
-if (!Cache) {
+if (!Cache || !Cache.extend) {
     return;
 }
 Cache.extend({
     'fifo': {
-        init: function() {
+        _init: function () {
             this.data = {};
-            this.getAllLocal();
         },
-        set: function (key, value) {
-            var data = this.data;
-            if (typeof data[key] === 'undefined') {
-                while (!isNaN(this.maxSize) &&
-                    this.size >= this.maxSize) {
-                    this.pop();
-                }
-                this.counter(1);
+        _set: function (entry) {
+            if (this._type(this.get(entry.key)) === 'undefined') {
+                this._popExtra();
+                this._counter(1);
             }
-            data[key] = value;
-            if (this.inited === true &&
-                this.persistent === true) {
-                this.setLocal(key, value);
+            this.data[entry.key] = entry;
+            if (this.persistent === true) {
+                this._setLocal(entry);
             }
         },
-        add: function (key, value) {
-            if (!this.has(key)) {
-                this.set(key, value);
-            }
+        _has: function (key) {
+            return this._type(this.get(key)) !== 'undefined';
         },
-        has: function(key) {
-            return typeof this.data[key] !== 'undefined';
-        },
-        get: function (key) {
+        _get: function (key) {
             return this.data[key];
         },
-        pop: function() {
+        _pop: function () {
             for (var key in this.data) {
-                var value = this.data[key];
+                var entry = this.data[key];
                 this.remove(key);
-                return value;
+                return entry;
             }
         },
-        each: function(fn, context, reverse) {
+        _each: function (fn, reverse) {
             var data = this.data,
                 key;
             if (!reverse) {
                 for (key in data) {
-                    fn.call(context, data[key], key);
+                    fn.call(this, data[key], key);
                 }
             } else {
                 var keys = [];
@@ -67,20 +56,20 @@ Cache.extend({
                 }
                 for (var i = keys.length - 1; i >= 0; i--) {
                     key = keys[i];
-                    fn.call(context, data[key], key);
+                    fn.call(this, data[key], key);
                 }
             }
         },
-        remove: function (key) {
+        _remove: function (key) {
             if (this.has(key)) {
-                var value = this.data[key];
+                var entry = this.data[key];
                 delete this.data[key];
-                this.removeLocal(key);
-                this.counter(-1);
-                return value;
+                this._removeLocal(key);
+                this._counter(-1);
+                return entry;
             }
         },
-        flush: function () {
+        _flush: function () {
             for (var key in this.data) {
                 this.remove(key);
             }

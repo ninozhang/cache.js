@@ -1,4 +1,4 @@
-(function() {
+(function () {
 var class2type = {},
     toString = class2type.toString,
     cachePrefix = 'cache',
@@ -8,12 +8,13 @@ var class2type = {},
         maxSize: NaN, // 缓存容量上限
         ttl: NaN, // 
         sign: ':', // 存储 key 的分隔符
-        algorithm: '', // 缓存算法
-        ns: '', // 命名空间
+        algorithm: 'lru', // 缓存算法
+        ns: 'cache', // 命名空间
         persistent: true // 持久化
-    };
+    },
+    undef;
 
-['Boolean', 'Number', 'String', 'Function', 'Array', 'Date', 'RegExp', 'Object', 'Error'].forEach(function(name) {
+['Boolean', 'Number', 'String', 'Function', 'Array', 'Date', 'RegExp', 'Object', 'Error'].forEach(function (name) {
     class2type['[object ' + name + ']'] = name.toLowerCase();
 });
 
@@ -37,30 +38,39 @@ function extend(obj) {
     return obj;
 }
 
-// 克隆简单对象
-function clone(obj) {
-    return JSON.parse(JSON.stringify(obj));
+function Cache(size, algorithm, ns, persistent) {
+    var options;
+    if (this._type(size) === 'object') {
+        options = size;
+    } else {
+        options = {};
+        if (size) {
+            options.size = size;
+        }
+        if (algorithm) {
+            options.algorithm = algorithm;
+        }
+        if (ns) {
+            options.ns = ns;
+        }
+        if (this._type(persistent) === 'boolean') {
+            options.persistent = persistent;
+        }
+    }
+    // 设置默认参数
+    extend(this, defaults, options);
+    // 初始化算法
+    this._switchAlgorithm(this.algorithm);
 }
 
-function Cache() {
-    this._init.apply(this, arguments);
-}
-
-Cache.extend = function(algorithms) {
+Cache.extend = function (algorithms) {
     extend(Cache.prototype.algorithms, algorithms);
 };
 
 Cache.prototype.algorithms = {};
 
-Cache.prototype._init = function(options) {
-    // 设置默认参数
-    extend(this, defaults);
-    // 设置初始化参数
-    this.config(options);
-};
-
 // 提供动态设置参数
-Cache.prototype.config = function(options) {
+Cache.prototype.config = function (options) {
     var hasChange = false;
     if (!options) {
         return;
@@ -69,19 +79,8 @@ Cache.prototype.config = function(options) {
     // 判断是否持久化
     if (type(options.persistent) === 'boolean' &&
         this.persistent !== options.persistent) {
-        this.removeAllLocal();
+        this._removeAllLocal();
         this.persistent = options.persistent;
-        hasChange = true;
-    }
-
-    // 判断是否修改了命名空间或分隔符
-    if ((type(options.ns) === 'string' &&
-            this.ns !== options.ns) ||
-        (type(options.sign) === 'string' &&
-            this.sign !== options.sign)) {
-        this.removeAllLocal();
-        this.ns = options.ns || this.ns;
-        this.sign = options.sign || this.sign;
         hasChange = true;
     }
 
@@ -96,214 +95,165 @@ Cache.prototype.config = function(options) {
 
     // 将所有变更持久化
     if (this.persistent && hasChange) {
-        this.setAllLocal();
+        this._setAllLocal();
     }
 
     // 改变缓存算法
     if (type(options.algorithm) === 'string' &&
-        this.algorithm !== options.algorithm) {
-        this.algorithm = options.algorithm;
+        this.algorithms !== options.algorithm) {
+        this.algorithms = options.algorithm;
         this._switchAlgorithm(this.algorithm);
     }
 };
 
-// 切换算法
-Cache.prototype._switchAlgorithm = function(name) {
-    this.inited = false;
-    this.algorithm = this.algorithms[name] || {};
-    if (this.algorithm.init) {
-        this.algorithm.init.call(this);
+Cache.prototype.get = function (key) {
+    var entry = this._get(key);
+    if (entry && !this._isExpire(entry)) {
+        return this._clone(entry.value);
     }
-    this.inited = true;
 };
 
-Cache.prototype.set = function(key, value) {
-    if (type(value) === 'undefined') {
+Cache.prototype.pop = function () {
+    var entry = this._pop(this);
+    return entry && entry.value;
+};
+
+Cache.prototype.set = function (key, value, exp) {
+    if (this._type(value) === 'undefined') {
         return this;
     }
-    if (this.algorithm.set) {
-        this.algorithm.set.call(this, key, value);
+    var entry = this._wrap(key, value, exp);
+    this._set(entry);
+    return this;
+};
+
+Cache.prototype.add = function (key, value, exp) {
+    if (type(this.get(key)) === 'undefined') {
+        this.set(key, value, exp);
     }
     return this;
 };
 
-Cache.prototype.add = function(key, value) {
-    if (type(value) === 'undefined') {
-        return this;
-    }
-    if (this.algorithm.add) {
-        this.algorithm.add.call(this, key, value);
+Cache.prototype.replace = function (key, value, exp) {
+    if (type(this.get(key)) !== 'undefined') {
+        this.set(key, value, exp);
     }
     return this;
 };
 
-Cache.prototype.replace = function(key, value) {
-    if (this.get(key)) {
-        this.set(key, value);
-    }
-    return this;
+Cache.prototype.append = function (key, value, exp) {
+    return this._pend(key, value, exp, 'append');
 };
 
-Cache.prototype.append = function(key, value) {
-    this._pend(key, value, 'append');
-    return this;
+Cache.prototype.prepend = function (key, value, exp) {
+    return this._pend(key, value, exp, 'prepend');
 };
 
-Cache.prototype.prepend = function(key, value) {
-    this._pend(key, value, 'prepend');
-    return this;
+Cache.prototype.has = function (key) {
+    return this._has(key);
 };
 
-Cache.prototype._pend = function(key, value, action) {
-    if (type(key) === 'undefined' ||
-        type(value) === 'undefined') {
-        return this;
-    }
-
-    var data = this.get(key);
-    // 已存储的值是数组，附加元素
-    if (Array.isArray(data)) {
-        var array = Array.isArray(value) ? value : [value],
-            length = array.length,
-            i;
-        if (action === 'append') {
-            for (i = 0; i < length; i++) {
-                data.push(array[i]);
-            }
-        } else {
-            for (i = length - 1; i >= 0; i--) {
-                data.unshift(array[i]);
-            }
-        }
-
-    // 已存储的值是对象，附加属性
-    } else if (data) {
-        extend(data, value);
-    }
-
-    this.set(key, data);
-    return this;
-};
-
-Cache.prototype.has = function(key) {
-    if (this.algorithm.has) {
-        return this.algorithm.has.call(this, key);
-    }
-    return false;
-};
-
-Cache.prototype.get = function(key) {
-    if (this.algorithm.get) {
-        return this.algorithm.get.call(this, key);
-    }
-};
-
-Cache.prototype.pop = function(ey) {
-    if (this.algorithm.pop) {
-        return this.algorithm.pop.call(this);
-    }
-};
-
-Cache.prototype.each = function(fn, context, reverse) {
+Cache.prototype.each = function (fn, context, reverse) {
     if (!fn) {
-        return this;
+        return;
     }
-    if (this.algorithm.each) {
-        if (!context) {
-            context = this;
+    if (!context) {
+        context = this;
+    }
+    var iterator = function (entry, key) {
+        if (entry) {
+            fn.call(context, entry.value, key);
         }
-        reverse = reverse === true;
-        this.algorithm.each.call(this, fn, context, reverse);
-    }
+    };
+    reverse = reverse === true;
+    this._each(iterator, reverse);
     return this;
 };
 
-Cache.prototype.remove = function(key) {
+Cache.prototype.remove = function (key) {
+    if (!key) {
+        return;
+    }
     if (key.indexOf('*') > -1) {
         var prefix = key.substring(0, key.indexOf('*'));
-        this.each(function(value, key) {
+        this.each(function (value, key) {
             if (key.indexOf(prefix) === 0) {
                 this.remove(key);
             }
         }, this);
     } else {
-        if (this.algorithm.remove) {
-            return this.algorithm.remove.call(this, key);
-        }
+        return this._remove(key);
     }
 };
 
-Cache.prototype.flush = function() {
-    if (this.algorithm.flush) {
-        this.algorithm.flush.call(this);
+Cache.prototype.restore = function () {
+    var entries = this._getAllLocal();
+    entries.forEach(function (entry) {
+        this.data[entry.key] = entry;
+    }, this);
+};
+
+Cache.prototype.flush = function () {
+    this._flush();
+    return this;
+};
+
+Cache.prototype._setLocal = function (entry) {
+    var key = [cachePrefix, this.ns, entry.key].join(this.sign),
+        newEntry = this._clone(entry, ['key', 'value', 'exp']);
+    localStorage.setItem(key, this._stringify(newEntry));
+    return this;
+};
+
+Cache.prototype._getLocal = function (key) {
+    var k = [cachePrefix, this.ns, key].join(this.sign),
+        item = localStorage.getItem(key);
+    if (!item) {
+        return;
     }
-    return this;
-};
-
-Cache.prototype._counter = function(diff) {
-    if (!isNaN(diff)) {
-        this.size += diff;
+    entry = this._parse(item);
+    if (this._isExpire(entry)) {
+        return;
     }
-    return this.size;
+    return entry;
 };
 
-Cache.prototype._stringify = function(obj) {
-    return JSON.stringify(obj);
-};
-
-Cache.prototype._parse = function(str) {
-    return JSON.parse(str);
-};
-
-Cache.prototype.setLocal = function(key, value) {
-    key = [cachePrefix, this.ns, key].join(this.sign);
-    value = this.stringify(value);
-    localStorage.setItem(key, value);
+Cache.prototype._removeLocal = function (key) {
+    var k = [cachePrefix, this.ns, key].join(this.sign);
+    localStorage.removeItem(k);
     return this;
 };
 
-Cache.prototype.getLocal = function(key) {
-    var value;
-    key = [cachePrefix, this.ns, key].join(this.sign);
-    value = localStorage.getItem(key);
-    return this.parse(value);
-};
-
-Cache.prototype.removeLocal = function(key) {
-    key = [cachePrefix, this.ns, key].join(this.sign);
-    localStorage.removeItem(key);
-    return this;
-};
-
-Cache.prototype.setAllLocal = function() {
-    var k, v;
-    this.each(function(value, key) {
-        k = [cachePrefix, this.ns, key].join(this.sign);
-        v = this.stringify(value);
-        localStorage.setItem(k, v);
+Cache.prototype._setAllLocal = function () {
+    this._each(function (entry) {
+        this._setLocal(entry);
     }, this);
     return this;
 };
 
-Cache.prototype.getAllLocal = function() {
+Cache.prototype._getAllLocal = function () {
     var length = localStorage.length,
         keyPrefix = cachePrefix + this.sign + this.ns + this.sign,
-        keyStart = keyPrefix.length,
-        key, value;
+        key, item, entry,
+        entries = [];
     for (var i = 0; i < length; i++) {
         key = localStorage.key(i);
         if (key && key.indexOf(keyPrefix) === 0) {
-            value = this.parse(localStorage.getItem(key));
-            key = key.substring(keyStart);
-            this.set(key, value);
+            item = localStorage.getItem(key);
+            if (item) {
+                entry = this._parse(item);
+            }
+            if (entry) {
+                entries.push(entry);
+            }
         }
     }
-    return this;
+    return entries;
 };
 
-Cache.prototype.removeAllLocal = function() {
+Cache.prototype._removeAllLocal = function () {
     var length = localStorage.length,
-        keyPrefix = [cachePrefix, this.ns].join(this.sign),
+        keyPrefix = cachePrefix + this.sign + this.ns + this.sign,
         key;
     for (var i = 0; i < length; i++) {
         key = localStorage.key(i);
@@ -312,6 +262,128 @@ Cache.prototype.removeAllLocal = function() {
         }
     }
     return this;
+};
+
+Cache.prototype._type = type;
+
+Cache.prototype._extend = extend;
+
+// 切换算法
+Cache.prototype._switchAlgorithm = function (name) {
+    this.inited = false;
+    var algorithm = this.algorithms[name];
+    if (algorithm) {
+        for (var key in algorithm) {
+            if (algorithm.hasOwnProperty(key)) {
+                this[key] = algorithm[key];
+            }
+        }
+        this._init();
+        this.restore();
+    }
+    this.inited = true;
+};
+
+Cache.prototype._pend = function (key, value, exp, action) {
+    if (type(key) === 'undefined' ||
+        type(value) === 'undefined') {
+        return this;
+    }
+
+    var entry = this._get(key);
+
+    if (!entry) {
+        return this;
+    }
+
+    // 已存储的值是数组，附加元素
+    if (Array.isArray(entry.value)) {
+        var array = Array.isArray(value) ? value : [value],
+            length = array.length,
+            i;
+        if (action === 'append') {
+            for (i = 0; i < length; i++) {
+                entry.value.push(array[i]);
+            }
+        } else {
+            for (i = length - 1; i >= 0; i--) {
+                entry.value.unshift(array[i]);
+            }
+        }
+
+    // 已存储的值是对象，附加属性
+    } else if (entry.value) {
+        extend(entry.value, value);
+    }
+
+    this._set(entry);
+    return this;
+};
+
+Cache.prototype._counter = function (diff) {
+    if (!isNaN(diff)) {
+        this.size += diff;
+    }
+    return this.size;
+};
+
+Cache.prototype._now = function () {
+    return Date.now();
+};
+
+Cache.prototype._wrap = function (key, value, exp) {
+    var now = this._now(),
+        entry;
+    value = this._clone(value);
+    entry = {
+        key: key,
+        value: value,
+        exp: exp ? exp * 1000 + now : 0
+    };
+    return entry;
+};
+
+// 被动检测对象是否过期
+Cache.prototype._isExpire = function (entry) {
+    var now = this._now();
+    if (entry &&
+        ((entry.exp && entry.exp > now) ||
+            !entry.exp)) {
+        return false;
+    }
+    return true;
+};
+
+// 克隆简单对象
+Cache.prototype._clone = function (obj, fields) {
+    if (this._type(obj) !== 'object' && !Array.isArray(obj)) {
+        return obj;
+    }
+    if (fields && Array.isArray(fields)) {
+        var o = {};
+        fields.forEach(function (field) {
+            o[field] = JSON.parse(JSON.stringify(obj[field]));
+        });
+        return o;
+    } else {
+        return JSON.parse(JSON.stringify(obj));
+    }
+};
+
+Cache.prototype._stringify = function (obj) {
+    return obj ? JSON.stringify(obj) : undef;
+};
+
+Cache.prototype._parse = function (str) {
+    return str ? JSON.parse(str) : undef;
+};
+
+// 弹走超出上限的东东，清理出一个空位
+Cache.prototype._popExtra = function () {
+    while (!isNaN(this.maxSize) &&
+        this.size >= this.maxSize) {
+        this.pop();
+    }
 };
 
 window.Cache = window.Cache || Cache;
